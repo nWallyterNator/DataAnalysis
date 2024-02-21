@@ -1,0 +1,508 @@
+SELECT * FROM payment;
+SELECT * FROM staff;
+SELECT * FROM store;
+SELECT * FROM address;
+
+
+-- ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^   REQUIREMENT B  ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^
+	
+	--  1.need to make the code transform  from A4
+	--  2.need to make a function
+	--  3.I chose to change the names to have it first and last name to make it more readable and understandable
+	--  4.I will see who has made the most sales
+	-- 	NW
+	
+--^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&
+
+
+
+-- CONCAT function to make sure the names will be 1 field
+CREATE OR REPLACE FUNCTION glue_name_together (last_name VARCHAR(100), first_name VARCHAR(60))
+	
+	RETURNS  VARCHAR(200)
+		
+		LANGUAGE plpgsql
+				
+				AS			
+				
+				$$
+	
+	DECLARE employee_name VARCHAR (200);
+	
+	BEGIN 
+		
+	SELECT last_name || ' ' || first_name INTO employee_name;
+			
+	RETURN employee_name;		
+	
+	END;
+	
+	$$
+
+
+-- test to see if it was created correctly
+-- I will test this function later in my procedure
+
+
+
+-- ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^   REQUIREMENT C  ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^
+	
+--  1.need to create 2 tables a summary table and a detailed table
+--  need to determine what fields I need
+-- 	NW
+
+
+--^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&
+
+
+--  2.creating summary table first
+--  will call it snapshot_summary
+DROP TABLE IF EXISTS snapshot_summary;
+
+CREATE TABLE snapshot_summary(
+		
+	staff_id SERIAL PRIMARY KEY UNIQUE,
+		
+	employee_name VARCHAR(200) NOT NULL UNIQUE  ,
+		
+	email VARCHAR(500),
+		
+	grand_total_sale INT
+
+);
+
+-- 3.Verifying it worked
+SELECT * FROM snapshot_summary;
+
+
+-- 4. creating detailed table 
+-- calling it thorough_ report
+-- recalling  payment and staff table to chose what I need
+SELECT * FROM payment;
+
+SELECT * FROM staff;
+
+DROP TABLE IF EXISTS thorough_report;
+
+CREATE TABLE thorough_report(
+		payment_id SERIAL PRIMARY KEY,
+	
+		payment_date TIMESTAMP,
+		
+		staff_id INT,
+	
+		first_name VARCHAR(100),
+		
+		last_name VARCHAR (200),
+		
+		email VARCHAR(300)
+);
+
+
+-- 5. verified report table worked
+
+SELECT * FROM thorough_report;
+
+
+
+-- ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^   REQUIREMENT D  ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^
+	
+--  1.need to extract data to the detailed report 
+--  this will fill up the table 
+-- 	will need to do an inner join 
+-- 	NW
+
+
+--^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&
+
+
+
+-- pulling up payment table
+SELECT * FROM payment;
+
+-- has payment_id
+-- staff_id
+-- payment_date
+
+
+-- pulling up staff table
+SELECT * FROM staff;
+
+-- has staff_id
+-- first_name
+-- last_name
+-- email
+
+-- 2.using an insert thorough_report first
+
+INSERT INTO thorough_report(payment_id,payment_date,staff_id,first_name,last_name,email)
+
+	SELECT payment.payment_id, payment.payment_date,
+
+	staff.staff_id,staff.first_name,staff.last_name,staff.email
+
+	FROM payment
+
+	INNER JOIN staff ON payment.staff_id = staff.staff_id;
+
+
+
+-- 3. verify to make sure it was created correctly
+SELECT * FROM thorough_report;
+
+-- checking how many rows are in the table
+SELECT COUNT(*)FROM thorough_report; --= 14596
+
+-- 4. making the summary table
+
+INSERT INTO snapshot_summary(
+
+	SELECT staff_id,
+
+	glue_name_together(last_name,first_name) AS employee_name,
+
+	email,
+
+	COUNT(staff_id) AS grand_total_sale
+
+	FROM thorough_report
+
+	GROUP BY staff_id, employee_name,email
+
+	HAVING COUNT(staff_id) >1
+
+	ORDER BY COUNT (staff_id) DESC
+);
+
+--  this will make it so it will add the total number of sales 
+
+
+SELECT * FROM snapshot_summary;
+
+-- 5. tested to validate that it worked
+
+-- 6. as you can see Jon Stephens is the winner of the 50.00 giftcard
+
+
+
+-- ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^   REQUIREMENT E  ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^
+	
+--  1.need to create a trigger that will keep updating the summary table  
+--  this data will need to be added  when data is added to the detailed table 
+-- 	NW
+
+
+--^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&
+
+
+-- can't rememember what are each tables
+SELECT * FROM snapshot_summary;
+
+	-- fields from this table
+		-- staff_id
+		-- employee_name
+		-- email
+		-- grand_total_sales
+		
+
+SELECT * FROM thorough_report;
+
+-- need to create a trigger statement -- from there it will give me the name of the trigger function
+
+-- this should make it possible if and when we hire a new employee
+
+-- it should add another row with the other employees info and have  their number of sales
+
+CREATE OR REPLACE TRIGGER new_data
+
+-- we will want this data added after  a new employee is added
+AFTER INSERT
+
+-- this should come from through_report
+ON thorough_report
+
+-- we also want it for each statement 
+FOR EACH STATEMENT
+
+-- executing the procedure
+EXECUTE PROCEDURE  insert_new_row_function();
+
+-- heres how to do the function
+
+-- creating the function
+
+CREATE OR REPLACE FUNCTION insert_new_row_function()
+	RETURNS TRIGGER
+	
+	LANGUAGE PLPGSQL
+		
+		AS		$$
+	BEGIN
+	-- this is the meat and potatoes of the function
+	-- this will help it update the row, we will delete to insert it again
+	DELETE FROM snapshot_summary;
+	
+	INSERT INTO snapshot_summary
+		
+		SELECT staff_id,
+
+		glue_name_together(last_name,first_name) AS employee_name,
+
+		email,
+
+		COUNT(staff_id) AS grand_total_sale
+
+		FROM thorough_report
+		GROUP BY staff_id, employee_name,email
+	--	HAVING COUNT(staff_id) >1
+		ORDER BY COUNT (staff_id) DESC;		
+-- RETURNING A NEW VALUE
+			RETURN NEW;		
+				END;		
+				$$;
+
+-- creating the trigger statement again
+
+CREATE TRIGGER new_data
+	
+	AFTER INSERT
+	
+	ON thorough_report
+	
+	FOR EACH STATEMENT
+
+EXECUTE PROCEDURE  insert_new_row_function();
+
+-- ran the trigger at it ran successfully
+	
+
+-- now to to test the trigger 
+
+-- inserting new value to see if the value will change
+
+-- need to figure out how many is in payment_id = 14596 rows
+
+INSERT INTO thorough_report VALUES(17502,CURRENT_DATE,4,'Nicholas','Walters','Wally.3@gmail.com');
+
+-- tested to make sure the trigger worked, validated and returned 14597 rows 
+
+SELECT COUNT(payment_id) FROM thorough_report; 
+
+
+-- testing  thorough_report to make sure my name pulled up, validated and returned 'Nicholas'
+
+SELECT first_name FROM thorough_report
+WHERE first_name = 'Nicholas';
+
+-- testing snapshot_summary
+-- looking to see if snapshot_summary was updated, validated and returned 4,'Walters,Nicholas','Wally.3@gmail.com',1
+-- this validates that the trigger is working and the function works as well as snap_shot table being updated :)
+SELECT * FROM snapshot_summary;
+
+
+-- ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^   REQUIREMENT F  ^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^
+	
+--  1.need to create a procedure that will refresh the table in both the detailed and summary table. 
+--  This procedure should clear the contents of the table but refresh it or restore it in case anything happens
+--  Identify a job scheduling tool that will be able to used to automate the proceudre
+-- NW
+
+
+--^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&
+
+-- creating the procedure
+
+-- I want to create a proceducre that will create a new table if the table is accidently deleted
+
+
+CREATE OR REPLACE PROCEDURE deleted_table_fix()
+
+	LANGUAGE
+	
+	PLPGSQL
+	
+	AS
+	
+	$$
+	
+	BEGIN
+	
+	-- the meat and potatoes of the procedure
+	-- lets make sure the tables aren't here so I will drop it just incase
+	DROP TABLE IF EXISTS thorough_report;
+	
+	DROP TABLE IF EXISTS snapshot_summary;
+	
+	-- creating a table as AS SELECT for thorough_report
+	CREATE TABLE thorough_report AS
+	-- will copy and paste from the previous created table
+	SELECT payment.payment_id, payment.payment_date,
+
+	staff.staff_id,staff.first_name,staff.last_name,staff.email
+
+	FROM payment
+
+	INNER JOIN staff ON payment.staff_id = staff.staff_id;
+	
+	-- creating a table as SELECT for snapshot_summary
+	CREATE TABLE snapshot_summary AS
+	
+	SELECT staff_id,
+
+	glue_name_together(last_name,first_name) AS employee_name,
+
+	email,
+
+	COUNT(staff_id) AS grand_total_sale
+
+	FROM thorough_report
+
+	GROUP BY staff_id, employee_name,email
+
+	HAVING COUNT(staff_id) >1
+
+	ORDER BY COUNT (staff_id) DESC;
+	
+	RETURN;
+	
+	END;
+	
+	$$;
+	
+-- was validated and worked.
+
+-- testing if procedure works
+-- lets say all the data was deleted on the table
+
+TRUNCATE thorough_report;
+-- checking to make sure all the data is gone
+-- nothing on the table
+SELECT *FROM thorough_report;
+
+TRUNCATE snapshot_summary;
+-- checking to make sure all the data is gone from snapshot_summary
+-- nothing was on that table
+SELECT * FROM snapshot_summary;
+
+-- calling the procedure 
+-- came back successful
+CALL deleted_table_fix();
+
+-- checking to see if the tables are up and running
+-- checking with thorough_report first
+-- all the data is backed/ it worked :)
+SELECT * FROM thorough_report;
+
+
+-- checking to see if the snapshot_summary is back to normal
+-- everything is back to normal
+SELECT * FROM snapshot_summary;
+
+
+-- creating another Procedure that will refresh the table if something is accidently deleted
+CREATE OR REPLACE PROCEDURE revive()
+
+LANGUAGE
+	
+	PLPGSQL
+	
+	AS
+	
+	$$
+	
+	BEGIN
+	-- meat and potatoes of procedure
+	-- this will empty out all of the tables
+	TRUNCATE thorough_report;
+	
+	TRUNCATE snapshot_summary;
+	-- need to put the data back in
+	
+	-- using the insert and select to insert it into thorough_report
+	INSERT INTO thorough_report
+	-- copy and pasting from the other example
+	SELECT payment.payment_id, payment.payment_date,
+
+	staff.staff_id,staff.first_name,staff.last_name,staff.email
+
+	FROM payment
+
+	INNER JOIN staff ON payment.staff_id = staff.staff_id;
+	
+	-- using the insert and select to insert it into snapshot_summary
+	INSERT INTO snapshot_summary
+	-- copy and pasting from the other example
+	SELECT staff_id,
+
+	glue_name_together(last_name,first_name) AS employee_name,
+
+	email,
+
+	COUNT(staff_id) AS grand_total_sale
+
+	FROM thorough_report
+
+	GROUP BY staff_id, employee_name,email
+
+	HAVING COUNT(staff_id) >1
+
+	ORDER BY COUNT (staff_id) DESC;
+	
+	RETURN;
+	
+	END;
+	
+	$$;
+
+-- query ran successfully
+-- need to test to make sure it worked
+-- deleting data from thorough_report
+
+SELECT  payment_id FROM thorough_report
+
+ORDER BY payment_id DESC;
+
+-- payment ids 32098-17503
+-- current number of rows = 14596
+SELECT COUNT(*) FROM thorough_report;
+
+DELETE FROM thorough_report
+
+WHERE payment_id BETWEEN 20000 AND 25000;
+
+-- finding info from thorough_report
+SELECT  payment_id FROM thorough_report
+
+ORDER BY payment_id DESC;
+
+-- current number of rows = 9595
+SELECT COUNT(*) FROM thorough_report;
+
+-- calling revive procedure
+-- ran successful
+CALL revive();
+
+
+-- testing to check if the data is valid
+SELECT * FROM thorough_report;
+
+-- current number of rows = 14596 :)
+SELECT COUNT(*) FROM thorough_report;
+
+SELECT * FROM snapshot_summary;
+
+
+-- Identify a job scheduling tool that will be used to automate the proccedure.
+
+-- I will run this data once a month so that we can have a constant competition on how well each employee is doing. 
+-- We will want to reward our strongest employee each month with a gift card to keep the competition alive and well. 
+-- We will use the results to train our current and new employees as an incentive. 
+-- New employees will be able to watch live video feeds of our current top employees and learn how they perform so well. 
+-- We will use Agent pgAgent to schedule the monthly procedure to get the most current up to date data.
+-- This tool will call upon the procedure to refresh monthly so that we are seeing how well each employee is doing.
+-- We will also use this data to see if one employee isn't improving month per month to see if there is anything wrong.
+
+
+
+
+--^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^        END OF CODE      $&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&^^&$%**%$&
